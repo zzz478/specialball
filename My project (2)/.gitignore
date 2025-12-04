@@ -18,7 +18,6 @@
 /Obj/
 /Build/
 /Logs/
-/ProjectSettings/ProjectVersion.txt
 
 # 依赖包缓存
 /Packages/packages-lock.json
