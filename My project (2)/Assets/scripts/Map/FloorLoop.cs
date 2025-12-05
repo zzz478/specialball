@@ -48,6 +48,13 @@ public class FloorLoop : MonoBehaviour
 
     void Update()
     {
+        if (GameManager.Instance == null)
+        {
+            // 没有GameManager时，正常执行地板循环（不影响游戏运行）
+            CheckAndLoopFloor();
+            return;
+        }
+
         // 游戏结束/暂停时停止循环逻辑
         if (GameManager.Instance.isGameOver || GameManager.Instance.isPaused)
             return;
