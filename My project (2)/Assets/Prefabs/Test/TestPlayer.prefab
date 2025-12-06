@@ -31,7 +31,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -2, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 0}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -86,8 +86,8 @@ SpriteRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
+  m_SortingLayerID: 1849938221
+  m_SortingLayer: 1
   m_SortingOrder: 0
   m_Sprite: {fileID: 10913, guid: 0000000000000000f000000000000000, type: 0}
   m_Color: {r: 0.98742133, g: 0.22046192, b: 0.22046192, a: 1}
@@ -174,13 +174,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b2af3c871d35b6e4bb5843b6a9900117, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  runSpeed: 5
   jumpForce: 8
   maxJumpCount: 2
   descendGravityScale: 4
   descendKey: 306
-  ballRed: {fileID: 21300000, guid: 00a4a8a35221d18429b8da3fa2ce67f0, type: 3}
-  ballBlue: {fileID: 21300000, guid: f5caed3e8bfb1384fac5d75c40bbfc94, type: 3}
+  ballRed: {fileID: 21300000, guid: 744aaae29c5b454438cb7de1ef2c076d, type: 3}
+  ballBlue: {fileID: 21300000, guid: da65fb2a75d0b8949bf16d352ddb5cc6, type: 3}
   colorSwitchKey: 304
   groundCheckOffsetY: 0.3
   groundCheckDistance: 0.8
