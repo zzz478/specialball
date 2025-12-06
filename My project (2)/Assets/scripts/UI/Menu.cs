@@ -62,7 +62,9 @@ public class Menu : MonoBehaviour
     }
     public void Next()
     {
+        Restart();
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+
     }
 }
 
