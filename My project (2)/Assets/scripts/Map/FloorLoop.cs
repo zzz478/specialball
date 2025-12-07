@@ -2,113 +2,196 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-
-/// <summary>
-/// 地板循环脚本：超出左边界瞬移到右边界，实现伪无限跑酷
-/// 挂载到每一块地板对象上
-/// </summary>
-[RequireComponent(typeof(BoxCollider2D))] // 确保地板有碰撞体
+[RequireComponent(typeof(BoxCollider2D))]
 public class FloorLoop : MonoBehaviour
 {
-    #region 可配置参数（Inspector面板调整）
+    #region 可配置参数
     [Header("循环边界参数")]
-    [Tooltip("地板超出此X坐标则瞬移（左边界）")]
-    public float leftBoundary = -15f;
-    [Tooltip("瞬移后的目标X坐标（右边界）")]
-    public float rightBoundary = 15f;
-    [Tooltip("瞬移后Y轴是否保持原位置（默认true）")]
+    public float leftBoundary = -20f;
+    public float rightBoundary = 25f;
+    [Header("地板尺寸参数")]
+    public float floorWidth = 8f;
     public bool keepYPosition = true;
-    [Tooltip("瞬移后随机切换地板颜色（红/蓝），可选功能")]
     public bool randomColorOnLoop = true;
-    [Tooltip("红色地板Sprite（仅randomColorOnLoop=true时需要）")]
     public Sprite floorRed;
-    [Tooltip("蓝色地板Sprite（仅randomColorOnLoop=true时需要）")]
     public Sprite floorBlue;
     #endregion
 
-    #region 私有变量
-    private SpriteRenderer sr; // 地板的SpriteRenderer组件
-    private float originalY; // 地板初始Y坐标（用于保持高度）
+    #region 金币参数
+    [Header("金币循环生成参数")]
+    public GameObject coinPrefab;
+    [Range(0f, 1f)] public float coinSpawnRate = 0.7f;
+    public float coinRate100 = 0.5f;
+    public float coinRate200 = 0.3f;
+    public float coinYMin = 0.5f;
+    public float coinYMax = 1.5f;
+    public float coinXRange = 1f;
+    private GameObject currentCoin;
+
+    // 全局保底计数（修复静态变量混乱问题）
+    private static int _globalNoCoinCount = 0;
+    [Header("金币保底配置（直接在编辑器调）")]
+    public int maxNoCoinFloor = 2; // 连续N块无金币强制生成
+    public float minCoinRate = 0.4f; // 最低生成概率
     #endregion
+
+    #region 私有变量
+    private SpriteRenderer sr;
+    private float originalY;
+    #endregion
+
+    private float GetDynamicCoinRate()
+    {
+        if (GameManager.Instance == null) return coinSpawnRate;
+
+        int currentScore = GameManager.Instance.currentScore;
+        float currentRate = coinSpawnRate;
+
+        // 平缓衰减：140分概率≈0.46，避免骤降
+        if (currentScore < 100)
+        {
+            currentRate = Mathf.Lerp(coinSpawnRate, 0.55f, currentScore / 100f);
+        }
+        else if (currentScore < 200)
+        {
+            currentRate = Mathf.Lerp(0.55f, 0.4f, (currentScore - 100) / 100f);
+        }
+        else
+        {
+            currentRate = 0.4f;
+        }
+        return Mathf.Max(currentRate, minCoinRate);
+    }
 
     void Awake()
     {
-        // 获取组件引用
         sr = GetComponent<SpriteRenderer>();
-        // 记录初始Y坐标（避免瞬移后Y轴偏移）
         originalY = transform.position.y;
 
-        // 容错：若没有SpriteRenderer，关闭随机颜色功能
         if (sr == null)
         {
             randomColorOnLoop = false;
-            Debug.LogWarning($"地板{gameObject.name}缺少SpriteRenderer，关闭随机颜色功能");
+            Debug.LogWarning($"地板{gameObject.name}缺少SpriteRenderer");
         }
     }
 
     void Update()
     {
-        if (GameManager.Instance == null)
-        {
-            // 没有GameManager时，正常执行地板循环（不影响游戏运行）
-            CheckAndLoopFloor();
-            return;
-        }
-
-        // 游戏结束/暂停时停止循环逻辑
-        if (GameManager.Instance.isGameOver || GameManager.Instance.isPaused)
-            return;
-
-        // 检测是否超出左边界
+        bool isPause = GameManager.Instance != null && GameManager.Instance.isPaused;
+        if (isPause) return;
         CheckAndLoopFloor();
     }
 
-    #region 核心循环逻辑
-    /// <summary>
-    /// 检测地板位置，超出左边界则瞬移到右边界
-    /// </summary>
+    // 完全保留原有地图循环逻辑
     void CheckAndLoopFloor()
     {
-        if (transform.position.x < leftBoundary)
+        PlayerController player = FindObjectOfType<PlayerController>();
+        if (player == null) return;
+
+        float playerX = player.transform.position.x;
+        if (transform.position.x < playerX - 25f)
         {
-            // 计算瞬移后的位置（保持Y轴/随机切换Y轴）
-            Vector2 newPos = new Vector2(rightBoundary, keepYPosition ? originalY : Random.Range(-3f, -2f));
+            float targetY = keepYPosition ? originalY : transform.position.y;
+            float minOffset = floorWidth * 0.8f;
+            float randomXOffset = Random.Range(minOffset, minOffset * 1.2f);
+            Vector2 newPos = new Vector2(playerX + 20f + randomXOffset, targetY);
+
+            while (IsPositionOverlap(newPos, minOffset))
+            {
+                randomXOffset += minOffset * 0.5f;
+                newPos.x = playerX + 20f + randomXOffset;
+            }
             transform.position = newPos;
 
-            // 随机切换地板颜色（可选功能）
+            SpawnCoinOnLoop();
             if (randomColorOnLoop)
                 RandomizeFloorColor();
         }
     }
 
-    /// <summary>
-    /// 随机切换地板红/蓝颜色
-    /// </summary>
+    // 修复后的金币生成逻辑
+    void SpawnCoinOnLoop()
+    {
+        if (currentCoin != null)
+        {
+            Destroy(currentCoin);
+            currentCoin = null;
+        }
+
+        if (coinPrefab == null)
+        {
+            Debug.LogWarning($"地板{gameObject.name}未配置金币预制体");
+            _globalNoCoinCount++;
+            return;
+        }
+
+        float dynamicRate = GetDynamicCoinRate();
+        bool forceSpawn = _globalNoCoinCount >= maxNoCoinFloor;
+        bool shouldSpawn = Random.value <= dynamicRate || forceSpawn;
+
+        // 调试日志，可查看生成状态
+        Debug.Log($"【金币】分数:{GameManager.Instance.currentScore} | 概率:{dynamicRate:F2} | 连续无金币:{_globalNoCoinCount} | 强制生成:{forceSpawn}");
+
+        if (shouldSpawn)
+        {
+            float coinX = transform.position.x + Random.Range(-coinXRange, coinXRange);
+            float coinY = transform.position.y + Random.Range(coinYMin, coinYMax);
+            currentCoin = Instantiate(coinPrefab, new Vector2(coinX, coinY), Quaternion.identity);
+            currentCoin.transform.localScale = Vector3.one;
+            currentCoin.transform.SetParent(null);
+
+            SpriteRenderer coinSr = currentCoin.GetComponent<SpriteRenderer>();
+            if (coinSr != null)
+            {
+                coinSr.sortingLayerName = "GamePlay";
+                coinSr.sortingOrder = 2;
+            }
+            _globalNoCoinCount = 0;
+        }
+        else
+        {
+            _globalNoCoinCount++;
+        }
+    }
+
+    public void BindCoin(GameObject coin)
+    {
+        currentCoin = coin;
+        _globalNoCoinCount = 0;
+    }
+
+    bool IsPositionOverlap(Vector2 targetPos, float minDistance)
+    {
+        FloorLoop[] allFloors = FindObjectsOfType<FloorLoop>();
+        foreach (FloorLoop floor in allFloors)
+        {
+            if (floor == this) continue;
+            float distance = Vector2.Distance(targetPos, floor.transform.position);
+            if (distance < minDistance)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void RandomizeFloorColor()
     {
         if (floorRed == null || floorBlue == null)
         {
-            Debug.LogWarning($"地板{gameObject.name}未配置红/蓝Sprite，跳过颜色切换");
+            Debug.LogWarning($"地板{gameObject.name}未配置红/蓝Sprite");
             return;
         }
 
-        // 50%概率切换红/蓝
         bool isRed = Random.Range(0, 2) == 0;
         sr.sprite = isRed ? floorRed : floorBlue;
     }
-    #endregion
 
-    #region 辅助调试（可选）
-    // 在Scene视图中绘制边界线，方便调试
     void OnDrawGizmos()
     {
-        // 左边界（红色线）
         Gizmos.color = Color.red;
         Gizmos.DrawLine(new Vector2(leftBoundary, -10f), new Vector2(leftBoundary, 10f));
-
-        // 右边界（绿色线）
         Gizmos.color = Color.green;
         Gizmos.DrawLine(new Vector2(rightBoundary, -10f), new Vector2(rightBoundary, 10f));
     }
-    #endregion
 }

@@ -5,13 +5,13 @@ public class PlayerController : MonoBehaviour
 {
     #region 核心配置参数（Inspector面板可调）
     [Header("运动参数")]
-    public float runSpeed = 5f;
-    public float jumpForce = 8f;
+    //public float runSpeed = 5f;
+    public float jumpForce = 10f;
     public int maxJumpCount = 2;
 
     [Header("速降参数")]
     [Tooltip("速降时重力缩放倍数（原重力*此值，建议3-5）")]
-    public float descendGravityScale = 4f;
+    public float descendGravityScale = 2f;
     [Tooltip("速降触发按键（默认左Ctrl）")]
     public KeyCode descendKey = KeyCode.LeftControl;
 
@@ -31,17 +31,21 @@ public class PlayerController : MonoBehaviour
 
     #region 私有变量
     private Rigidbody2D rb;
-    private SpriteRenderer sr; // 新增：Sprite渲染器引用
+    private SpriteRenderer sr; // Sprite渲染器引用
     private int currentJumpCount = 0;
     private bool isGrounded = false;
     private bool isDescending = false;
     private bool isTouchingGround = false;
     private float originalGravityScale;
-    private bool isRed = true; // 新增：当前颜色状态（默认红色）
+    private float protectTime = 2f; // 启动2秒内不触发死亡
+    private float startTime;
+    private bool isRed = true; //当前颜色状态（默认红色）
     #endregion
 
     void Awake()
     {
+        startTime = Time.time; // 记录启动时间
+
         rb = GetComponent<Rigidbody2D>();
         sr = GetComponent<SpriteRenderer>(); // 获取Sprite渲染器
         originalGravityScale = rb.gravityScale;
@@ -62,12 +66,12 @@ public class PlayerController : MonoBehaviour
 
         if (GameManager.Instance.isGameOver || GameManager.Instance.isPaused) return;
 
-        if (transform.position.y > 10f || transform.position.y < -10f)
+        if (transform.position.y > 15f || transform.position.y < -15f)
         {
             GameManager.Instance.GameOver();
             rb.velocity = Vector2.zero;
             rb.isKinematic = true;
-            // 补充：死亡后视觉反馈
+            //死亡后视觉反馈
             if (sr != null) sr.color = new Color(1f, 1f, 1f, 0.5f);
             enabled = false;
             return;
@@ -134,8 +138,11 @@ public class PlayerController : MonoBehaviour
     // 自动奔跑
     void AutoRun()
     {
+        float currentSpeed = GameManager.Instance != null
+        ? GameManager.Instance.GetCurrentRunSpeed()
+        : 5f; // 兜底默认速度
         Vector2 currentVel = rb.velocity;
-        currentVel.x = runSpeed;
+        currentVel.x = currentSpeed; // 用动态速度替代固定值
         rb.velocity = currentVel;
     }
 
@@ -161,8 +168,14 @@ public class PlayerController : MonoBehaviour
     {
         if (isDescending)
         {
-            rb.gravityScale = descendGravityScale;
-            rb.AddForce(Vector2.down * 5f, ForceMode2D.Impulse); // 额外下压力
+            // 从GameManager获取当前档位的速降重力
+            float currentDescendGravity = GameManager.Instance != null
+                ? GameManager.Instance.GetCurrentDescendGravity()
+                : 2f; // 兜底默认值
+
+            rb.gravityScale = currentDescendGravity;
+            // 可选：保留轻微下压力，或删除（根据手感）
+            rb.AddForce(Vector2.down * 1f, ForceMode2D.Impulse);
         }
         else
         {
@@ -240,9 +253,27 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public void ResetPlayerState()
+    {
+        if (rb == null) rb = GetComponent<Rigidbody2D>();
+        if (sr == null) sr = GetComponent<SpriteRenderer>();
+
+        rb.isKinematic = false;
+        rb.velocity = Vector2.zero;
+        rb.gravityScale = originalGravityScale;
+        sr.color = Color.white; // 恢复不透明
+        enabled = true; // 重新启用脚本
+        currentJumpCount = 0;
+        isDescending = false;
+        isRed = true; // 重置颜色为红色
+        InitBallColor(); // 恢复初始Sprite
+    }
+    //重启游戏时恢复刚体状态（在PlayerController中加此方法，由Menu的Restart调用）
     void OnTriggerEnter2D(Collider2D other)
     {
         if (GameManager.Instance == null) return; // 空引用容错
+
+        if (Time.time - startTime < protectTime) return; // 启动保护期内不触发死亡
 
         if (other.CompareTag("Death"))
         {
@@ -260,6 +291,9 @@ public class PlayerController : MonoBehaviour
     /// <param name="floorCollider">碰撞到的地板碰撞体</param>
     void CheckFloorColorMatch(Collider2D floorCollider)
     {
+        // 启动保护期内不触发死亡
+        if (Time.time - startTime < protectTime) return;
+
         if (GameManager.Instance == null || GameManager.Instance.isGameOver) return; // 避免重复触发
 
         SpriteRenderer floorSr = floorCollider.GetComponent<SpriteRenderer>();

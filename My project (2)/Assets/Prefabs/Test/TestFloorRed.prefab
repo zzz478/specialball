@@ -145,7 +145,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   leftBoundary: -15
   rightBoundary: 15
+  floorWidth: 8
   keepYPosition: 1
   randomColorOnLoop: 1
-  floorRed: {fileID: 0}
-  floorBlue: {fileID: 0}
+  floorRed: {fileID: 21300000, guid: 24fa0cf4243a86c4fb3d816de188571e, type: 3}
+  floorBlue: {fileID: 21300000, guid: d2e032b94106e464992b233830008257, type: 3}
+  coinPrefab: {fileID: 8625740808522052409, guid: 3073539803090f1478e3107341720511, type: 3}
+  coinSpawnRate: 0.7
+  coinRate100: 0.5
+  coinRate200: 0.3
+  coinYMin: 0.5
+  coinYMax: 1.5
+  coinXRange: 1
+  maxNoCoinFloor: 2
+  minCoinRate: 0.4

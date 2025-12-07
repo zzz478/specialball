@@ -1,46 +1,42 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-/// <summary>
-/// 基础版随机地图生成：地板+金币
-/// 挂载到空对象MapGenerator上
-/// </summary>
+
 public class RandomMapGenerator : MonoBehaviour
 {
-    #region 地板参数（Inspector配置）
-    public GameObject floorRedPrefab; // 红地板预制体
-    public GameObject floorBluePrefab; // 蓝地板预制体
-    public int floorCount = 20; // 生成地板总数
-    public float startX = 0f; // 地板起始X坐标
-    public float floorWidth = 16f; // 单块地板宽度（匹配Scale.X=16）
-    public float floorY = -3f; // 地板固定Y坐标
-    private int lastColorType = -1; // 上一块颜色（0=红，1=蓝）
-    private int sameColorCount = 0; // 连续同色计数（≤2块）
+    #region 地板参数
+    public GameObject floorRedPrefab;
+    public GameObject floorBluePrefab;
+    public float startX = -40f;
+    public int floorCount = 20;
+    public float floorWidth = 5f;
+    public float floorYMin = -5f;
+    public float floorYMax = 1f;
+    private float randomFloorY;
+    private int lastColorType = -1;
+    private int sameColorCount = 0;
     #endregion
 
-    #region 金币参数（Inspector配置）
-    public GameObject coinPrefab; // 金币预制体
-    [Range(0f, 1f)] public float coinSpawnRate = 0.7f; // 70%概率生成金币
-    public float coinYMin = 0.5f; // 金币在地板上方最小高度
-    public float coinYMax = 1.5f; // 金币在地板上方最大高度
-    public float coinXRange = 1f; // 金币X轴偏移范围
+    #region 金币参数
+    public GameObject coinPrefab;
+    [Range(0f, 1f)] public float coinSpawnRate = 0.7f;
+    public float coinYMin = 0.5f;
+    public float coinYMax = 1.5f;
+    public float coinXRange = 1f;
     #endregion
 
     void Start()
     {
-        GenerateRandomMap(); // 游戏开始生成地图
+        GenerateRandomMap();
     }
 
-    /// <summary>
-    /// 生成随机地板+金币
-    /// </summary>
     void GenerateRandomMap()
     {
-        float currentX = startX; // 当前生成位置X
+        float currentX = startX;
 
         for (int i = 0; i < floorCount; i++)
         {
-            // 1. 随机选地板颜色（限制连续同色≤2块）
+            // 1. 随机颜色（限制连续同色≤2块）
             int colorType = Random.Range(0, 2);
             if (colorType == lastColorType)
             {
@@ -57,46 +53,61 @@ public class RandomMapGenerator : MonoBehaviour
                 lastColorType = colorType;
             }
 
-            // 2. 生成地板
+            // 2. 实例化地板
             GameObject floorPrefab = colorType == 0 ? floorRedPrefab : floorBluePrefab;
+            float randomFloorY = Random.Range(floorYMin, floorYMax);
             GameObject floor = Instantiate(floorPrefab, transform);
-            floor.transform.position = new Vector2(currentX, floorY);
+            floor.transform.position = new Vector2(currentX, randomFloorY);
 
-            // 3. 给地板赋值循环参数
+            // 关键：设置地板渲染层级（前景）
+            SpriteRenderer floorSr = floor.GetComponent<SpriteRenderer>();
+            if (floorSr != null)
+            {
+                floorSr.sortingLayerName = "GamePlay";
+                floorSr.sortingOrder = 1;
+            }
+
+            // 3. 配置地板循环参数
             FloorLoop floorLoop = floor.GetComponent<FloorLoop>();
             if (floorLoop != null)
             {
-                floorLoop.leftBoundary = -15f;
-                floorLoop.rightBoundary = 15f;
-                floorLoop.keepYPosition = true;
+                floorLoop.keepYPosition = false;
+                floorLoop.floorWidth = floorWidth; // 同步地板宽度
             }
 
-            // 4. 随机生成金币
-            SpawnCoin(currentX);
+            // 4. 生成金币（提高初始概率到90%）
+            SpawnCoin(floor, currentX, randomFloorY);
 
-            // 5. 下一块地板X偏移
-            currentX += floorWidth;
+            // 5. 缩小X偏移（解决地图间隔）
+            currentX += floorWidth * 0.6f; // 从0.8→0.6，减少地板间距
         }
     }
 
-    /// <summary>
-    /// 在指定地板位置生成金币
-    /// </summary>
-    void SpawnCoin(float floorX)
+    // 优化金币生成（直接绑定，避免遍历）
+    void SpawnCoin(GameObject floor, float floorX, float floorY)
     {
-        if (coinPrefab == null || Random.value > coinSpawnRate) return;
+        // 初始阶段概率提高到90%，保证前期金币充足
+        if (coinPrefab == null || Random.value > 0.9f) return;
 
         float coinX = floorX + Random.Range(-coinXRange, coinXRange);
         float coinY = floorY + Random.Range(coinYMin, coinYMax);
 
-        GameObject coin = Instantiate(coinPrefab, transform);
-        coin.transform.position = new Vector2(coinX, coinY);
+        GameObject coin = Instantiate(coinPrefab, new Vector2(coinX, coinY), Quaternion.identity);
+        coin.transform.localScale = Vector3.one;
+        coin.transform.SetParent(floor.transform);
 
-        // 金币随地板循环
-        FloorLoop coinLoop = coin.AddComponent<FloorLoop>();
-        coinLoop.leftBoundary = -15f;
-        coinLoop.rightBoundary = 15f;
-        coinLoop.keepYPosition = true;
-        coinLoop.randomColorOnLoop = false;
+        // 设置金币渲染层级
+        SpriteRenderer coinSr = coin.GetComponent<SpriteRenderer>();
+        if (coinSr != null)
+        {
+            coinSr.sortingLayerName = "GamePlay";
+            coinSr.sortingOrder = 2;
+        }
+
+        FloorLoop floorLoop = floor.GetComponent<FloorLoop>();
+        if (floorLoop != null)
+        {
+            floorLoop.BindCoin(coin);
+        }
     }
 }
